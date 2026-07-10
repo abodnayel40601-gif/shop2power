@@ -4,6 +4,7 @@ import GameCard from "./components/GameCard";
 import TopupFlow from "./components/TopupFlow";
 import AiAssistant from "./components/AiAssistant";
 import LoginModal from "./components/LoginModal";
+import SignInPage from "./components/SignInPage";
 import { Language, Country, COUNTRIES, TRANSLATIONS } from "./types";
 import { GAMES, PAYMENT_METHODS } from "./data";
 import { ShieldCheck, Gamepad2 } from "lucide-react";
@@ -16,10 +17,37 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [user, setUser] = useState<User | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<"home" | "signin">(() => {
+    const hash = window.location.hash;
+    const path = window.location.pathname;
+    if (hash === "#/signin" || hash === "#signin" || path.endsWith("/signin") || path.endsWith("/signin/")) {
+      return "signin";
+    }
+    return "home";
+  });
 
   const selectedGame = GAMES.find((g) => g.id === selectedGameId);
   const isAr = language === "ar";
   const t = TRANSLATIONS[language];
+
+  // Listener to handle URL changes in browser address bar (search bar)
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const hash = window.location.hash;
+      const path = window.location.pathname;
+      if (hash === "#/signin" || hash === "#signin" || path.endsWith("/signin") || path.endsWith("/signin/")) {
+        setCurrentView("signin");
+      } else {
+        setCurrentView("home");
+      }
+    };
+    window.addEventListener("hashchange", handleLocationChange);
+    window.addEventListener("popstate", handleLocationChange);
+    return () => {
+      window.removeEventListener("hashchange", handleLocationChange);
+      window.removeEventListener("popstate", handleLocationChange);
+    };
+  }, []);
 
   // Auth State Listener
   useEffect(() => {
@@ -66,20 +94,38 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 selection:bg-indigo-600 selection:text-white pb-16">
       {/* Dynamic Header */}
-      <Header
-        language={language}
-        setLanguage={setLanguage}
-        onLogoClick={() => setSelectedGameId(null)}
-        user={user}
-        onLoginClick={() => setIsLoginModalOpen(true)}
-        onLogoutClick={handleLogout}
-      />
+      {currentView !== "signin" && (
+        <Header
+          language={language}
+          setLanguage={setLanguage}
+          onLogoClick={() => {
+            setSelectedGameId(null);
+            setCurrentView("home");
+            window.location.hash = "";
+          }}
+          user={user}
+          onLoginClick={() => {
+            setCurrentView("signin");
+            window.location.hash = "#/signin";
+          }}
+          onLogoutClick={handleLogout}
+        />
+      )}
 
       {/* Main Container Wrapper with RTL support */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8" dir={isAr ? "rtl" : "ltr"}>
         <div className="space-y-8">
-          {/* If a game is active, display the custom top-up flow */}
-          {selectedGame ? (
+          {currentView === "signin" ? (
+            <SignInPage
+              language={language}
+              onBack={() => {
+                setCurrentView("home");
+                window.location.hash = "";
+              }}
+              onUserUpdate={(u) => setUser(u)}
+            />
+          ) : selectedGame ? (
+            /* If a game is active, display the custom top-up flow */
             <TopupFlow
               game={selectedGame}
               language={language}
@@ -167,25 +213,29 @@ export default function App() {
       </main>
 
       {/* Floating AI Corner Chat Assistant */}
-      <AiAssistant language={language} />
+      {currentView !== "signin" && <AiAssistant language={language} />}
 
-      {/* Login Modal */}
+      {/* Login Modal (fallback/auxiliary) */}
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
         language={language}
+        onSuccessRegister={() => setSelectedGameId(null)}
+        onUserUpdate={(u) => setUser(u)}
       />
 
       {/* Footer stamp */}
-      <footer className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 border-t border-slate-200 text-center space-y-4" dir={isAr ? "rtl" : "ltr"}>
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 font-medium">
-          <span>{t.allRightsReserved}</span>
-          <div className="flex items-center gap-1.5 text-indigo-600/90 bg-indigo-50 border border-indigo-100 rounded-full px-3 py-1">
-            <ShieldCheck className="h-4 w-4" />
-            <span className="font-bold text-slate-700">{isAr ? "بوابة شحن آمنة موثقة 100%" : "100% Certified Safe Checkout Gateway"}</span>
+      {currentView !== "signin" && (
+        <footer className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 border-t border-slate-200 text-center space-y-4" dir={isAr ? "rtl" : "ltr"}>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 font-medium">
+            <span>{t.allRightsReserved}</span>
+            <div className="flex items-center gap-1.5 text-indigo-600/90 bg-indigo-50 border border-indigo-100 rounded-full px-3 py-1">
+              <ShieldCheck className="h-4 w-4" />
+              <span className="font-bold text-slate-700">{isAr ? "بوابة شحن آمنة موثقة 100%" : "100% Certified Safe Checkout Gateway"}</span>
+            </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

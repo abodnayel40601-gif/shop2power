@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net - Deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User profile validator
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'displayName', 'provider'])
+        && data.keys().hasOnly(['email', 'displayName', 'provider', 'lastLoginAt', 'createdAt'])
+        && (data.email == null || (data.email is string && data.email.size() >= 3 && data.email.size() <= 254))
+        && data.displayName is string
+        && data.displayName.size() >= 2
+        && data.displayName.size() <= 50
+        && data.provider is string
+        && (data.provider == 'password' || data.provider == 'google' || data.provider == 'facebook' || data.provider == 'github')
+        && (!('lastLoginAt' in data) || data.lastLoginAt is string)
+        && (!('createdAt' in data) || data.createdAt is string);
+    }
+
+    // Secure the 'users' collection
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false; // No list queries allowed for user documents
+
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
+      
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'provider', 'lastLoginAt', 'createdAt'])
+      );
+      
+      allow delete: if false; // Deletions of user profiles from client-side SDK are forbidden
+    }
+  }
+}

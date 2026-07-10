@@ -266,7 +266,7 @@ export const TRANSLATIONS = {
     robloxIdHelp: "Open Roblox, navigate to your Profile page, and check the numbers in your browser URL bar.",
     mlbbIdHelp: "Open MLBB, click your avatar, you'll find your ID and Server ID (Zone ID) under your name like ID: 1234567 (1234).",
     helpTitle: "Quick Help Center",
-    login: "Log In",
+    login: "Sign In",
     logout: "Log Out",
     loginTitle: "Log in to your account",
     email: "Email Address",
