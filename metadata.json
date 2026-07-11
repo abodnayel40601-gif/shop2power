@@ -1,6 +1,6 @@
 {
   "name": "Shop2Power",
-  "description": "A gaming top-up center similar to Shop2Power, supporting mobile payments, voucher recharges, and a secure Gemini-powered gaming support assistant.",
+  "description": "A gaming top-up center similar to Shop2Power, supporting mobile payments, voucher recharges, and secure checkout gateways.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

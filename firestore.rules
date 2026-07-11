@@ -31,15 +31,17 @@ service cloud.firestore {
     // User profile validator
     function isValidUser(data) {
       return data.keys().hasAll(['email', 'displayName', 'provider'])
-        && data.keys().hasOnly(['email', 'displayName', 'provider', 'lastLoginAt', 'createdAt'])
+        && data.keys().hasOnly(['email', 'displayName', 'provider', 'lastLoginAt', 'createdAt', 'passwordHash', 'deactivatedPasswords'])
         && (data.email == null || (data.email is string && data.email.size() >= 3 && data.email.size() <= 254))
         && data.displayName is string
         && data.displayName.size() >= 2
         && data.displayName.size() <= 50
         && data.provider is string
-        && (data.provider == 'password' || data.provider == 'google' || data.provider == 'facebook' || data.provider == 'github')
+        && (data.provider == 'password' || data.provider == 'google' || data.provider == 'playgames' || data.provider == 'github')
         && (!('lastLoginAt' in data) || data.lastLoginAt is string)
-        && (!('createdAt' in data) || data.createdAt is string);
+        && (!('createdAt' in data) || data.createdAt is string)
+        && (!('passwordHash' in data) || data.passwordHash is string)
+        && (!('deactivatedPasswords' in data) || data.deactivatedPasswords is list);
     }
 
     // Secure the 'users' collection
@@ -50,7 +52,7 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
       
       allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'provider', 'lastLoginAt', 'createdAt'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'provider', 'lastLoginAt', 'createdAt', 'passwordHash', 'deactivatedPasswords'])
       );
       
       allow delete: if false; // Deletions of user profiles from client-side SDK are forbidden

@@ -5,7 +5,6 @@ import { Language, TRANSLATIONS } from "../types";
 import { 
   auth, 
   googleProvider, 
-  facebookProvider,
   githubProvider,
   signInWithPopup, 
   signInWithEmailAndPassword, 
@@ -43,9 +42,32 @@ const GoogleIcon = () => (
   </svg>
 );
 
-const FacebookIcon = () => (
-  <svg className="h-5 w-5 fill-[#1877F2]" viewBox="0 0 24 24">
-    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+const PlayGamesIcon = () => (
+  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Dark Green Triangle Background with Rounded Corners */}
+    <path
+      d="M3.5 2.1c-1.1-.6-2.5.2-2.5 1.5v16.8c0 1.3 1.4 2.1 2.5 1.5l14.7-8.4c1-.6 1-2.1 0-2.7L3.5 2.1z"
+      fill="#006B4E"
+    />
+    
+    {/* Bright Green Game Controller (Rotated and scaled to fit the triangle) */}
+    <g transform="translate(9.5, 12.2) rotate(-12) scale(0.65) translate(-12, -12)">
+      {/* Game Controller Body */}
+      <path
+        d="M7.5 6H16.5C18.5 6 22 7.5 22 12C22 15 20.5 18 18 18C15.5 18 14.5 14.5 12 14.5C9.5 14.5 8.5 18 6 18C3.5 18 2 15 2 12C2 7.5 5.5 6 7.5 6Z"
+        fill="#00E676"
+      />
+      {/* D-Pad on the left */}
+      <path
+        d="M7.5 9.5H6.5V11H5V12.5H6.5V14H7.5V12.5H9V11H7.5V9.5Z"
+        fill="white"
+      />
+      {/* Action Buttons on the right (Diamond layout) */}
+      <circle cx="16.5" cy="9.5" r="0.8" fill="white" />
+      <circle cx="18" cy="11.2" r="0.8" fill="white" />
+      <circle cx="16.5" cy="12.9" r="0.8" fill="white" />
+      <circle cx="15" cy="11.2" r="0.8" fill="white" />
+    </g>
   </svg>
 );
 
@@ -79,7 +101,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [timer, setTimer] = useState(0);
-  const [configErrorModal, setConfigErrorModal] = useState<{ isOpen: boolean; provider: "facebook" | "github" | null }>({ isOpen: false, provider: null });
+  const [configErrorModal, setConfigErrorModal] = useState<{ isOpen: boolean; provider: "playgames" | "github" | null }>({ isOpen: false, provider: null });
 
   const t = TRANSLATIONS[language];
   const isAr = language === "ar";
@@ -112,6 +134,196 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
     setSuccess(null);
     setShowLoginPassword(false);
     setShowRegisterPassword(false);
+  };
+
+  // Forgot Password Flow States
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotPasswordStep, setForgotPasswordStep] = useState<1 | 2 | 3>(1); // 1: Email, 2: Code, 3: Password
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [forgotPasswordCodeInput, setForgotPasswordCodeInput] = useState("");
+  const [forgotPasswordGeneratedCode, setForgotPasswordGeneratedCode] = useState("");
+  const [forgotPasswordNewPassword, setForgotPasswordNewPassword] = useState("");
+  const [forgotPasswordConfirmPassword, setForgotPasswordConfirmPassword] = useState("");
+  const [showForgotPasswordNewPassword, setShowForgotPasswordNewPassword] = useState(false);
+  const [showForgotPasswordConfirmPassword, setShowForgotPasswordConfirmPassword] = useState(false);
+
+  const resetForgotPasswordFlow = () => {
+    setIsForgotPassword(false);
+    setForgotPasswordStep(1);
+    setForgotPasswordEmail("");
+    setForgotPasswordCodeInput("");
+    setForgotPasswordGeneratedCode("");
+    setForgotPasswordNewPassword("");
+    setForgotPasswordConfirmPassword("");
+    setTimer(0);
+    setError(null);
+    setSuccess(null);
+    setEmailError(false);
+    setPasswordError(false);
+    setVerificationError(false);
+  };
+
+  const handleForgotPasswordRequestEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setEmailError(false);
+
+    const emailLower = email.trim().toLowerCase();
+    if (!emailLower) {
+      setEmailError(true);
+      setError(isAr ? "الرجاء إدخال البريد الإلكتروني" : "Please enter your email");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Check if user already exists in Firestore
+      const q = query(collection(db, "users"), where("email", "==", emailLower));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        setEmailError(true);
+        setError(isAr ? "البريد الإلكتروني المدخل غير مسجل لدينا" : "The email address is not registered");
+        setLoading(false);
+        return;
+      }
+
+      // Generate a 6-digit numeric verification code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+      const response = await fetch("/api/send-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: emailLower,
+          code,
+          username: querySnapshot.docs[0].data().displayName || "",
+          type: "reset",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to send code");
+      }
+
+      setForgotPasswordGeneratedCode(code);
+      setForgotPasswordEmail(emailLower);
+      setTimer(60);
+      setForgotPasswordStep(2);
+      setForgotPasswordCodeInput("");
+      setSuccess(isAr ? "تم إرسال رمز التحقق إلى بريدك الإلكتروني" : "Verification code sent to your email");
+    } catch (err: any) {
+      console.warn("Error sending forgot password email:", err);
+      setEmailError(true);
+      setError(isAr ? "لقد حدث خطأ ما" : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPasswordResendCode = async () => {
+    if (timer > 0) return;
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      const response = await fetch("/api/send-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: forgotPasswordEmail,
+          code,
+          type: "reset",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to send code");
+      }
+
+      setForgotPasswordGeneratedCode(code);
+      setTimer(60);
+      setForgotPasswordCodeInput("");
+      setSuccess(isAr ? "تم إعادة إرسال الرمز بنجاح" : "Verification code resent successfully");
+    } catch (err) {
+      console.warn("Error resending forgot password code:", err);
+      setError(isAr ? "لقد حدث خطأ ما" : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPasswordVerifyCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setVerificationError(false);
+
+    if (forgotPasswordCodeInput.trim() === forgotPasswordGeneratedCode) {
+      setForgotPasswordStep(3);
+    } else {
+      setVerificationError(true);
+      setError(isAr ? "رمز التحقق الذي أدخلته غير صحيح" : "The verification code you entered is incorrect");
+    }
+  };
+
+  const handleForgotPasswordResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setPasswordError(false);
+
+    if (!forgotPasswordNewPassword || forgotPasswordNewPassword.length < 6) {
+      setPasswordError(true);
+      setError(isAr ? "يجب أن تكون كلمة المرور 6 أحرف على الأقل" : "Password must be at least 6 characters");
+      return;
+    }
+
+    if (forgotPasswordNewPassword !== forgotPasswordConfirmPassword) {
+      setPasswordError(true);
+      setError(isAr ? "كلمات السر غير متشابه" : "Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: forgotPasswordEmail,
+          newPassword: forgotPasswordNewPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to reset password");
+      }
+
+      setSuccess(isAr ? "تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول." : "Password reset successfully! You can now sign in.");
+      
+      // Delay before returning to login form
+      setTimeout(() => {
+        resetForgotPasswordFlow();
+      }, 2000);
+    } catch (err: any) {
+      console.warn("Password reset error:", err);
+      setError(isAr ? "لقد حدث خطأ ما أثناء إعادة تعيين كلمة المرور" : "Something went wrong while resetting the password");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Google authentication
@@ -148,23 +360,23 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
     }
   };
 
-  // Facebook authentication
-  const handleFacebookAuth = async () => {
+  // Play Games authentication
+  const handlePlayGamesAuth = async () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
     try {
-      const userCredential = await signInWithPopup(auth, facebookProvider);
+      const userCredential = await signInWithPopup(auth, googleProvider);
       const user = userCredential.user;
 
-      // Save user to database (Firestore) with provider "facebook" asynchronously in background
+      // Save user to database (Firestore) with provider "playgames" asynchronously in background
       setDoc(doc(db, "users", user.uid), {
         email: user.email?.toLowerCase() || null,
-        displayName: user.displayName || "Facebook Player",
-        provider: "facebook",
+        displayName: user.displayName || (isAr ? "لاعب بلاي جيمز" : "Play Games Player"),
+        provider: "playgames",
         lastLoginAt: new Date().toISOString()
       }, { merge: true }).catch((dbSaveErr) => {
-        console.error("Failed to save Facebook user in database:", dbSaveErr);
+        console.error("Failed to save Play Games user in database:", dbSaveErr);
       });
 
       setSuccess(t.loginSuccess);
@@ -175,9 +387,9 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
         onBack();
       }, 1000);
     } catch (err: any) {
-      console.warn("Facebook authentication handled gracefully:", err.code || err.message);
+      console.warn("Play Games authentication handled gracefully:", err.code || err.message);
       if (err.code === "auth/invalid-credential-or-provider-id" || err.code === "auth/configuration-not-found") {
-        setConfigErrorModal({ isOpen: true, provider: "facebook" });
+        setConfigErrorModal({ isOpen: true, provider: "playgames" });
       } else {
         setError(isAr ? "لقد حدث خطأ ما" : "Something went wrong");
       }
@@ -244,18 +456,72 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
     setLoading(true);
     try {
       const emailLower = email.trim().toLowerCase();
-      const userCredential = await signInWithEmailAndPassword(auth, emailLower, password);
-      const user = userCredential.user;
 
-      // Update last login in Firestore asynchronously
-      setDoc(doc(db, "users", user.uid), {
-        email: emailLower,
-        displayName: user.displayName || email.split("@")[0],
-        provider: "password",
-        lastLoginAt: new Date().toISOString()
-      }, { merge: true }).catch((dbSaveErr) => {
-        console.error("Failed to update last login in database:", dbSaveErr);
-      });
+      // Check password history first to display custom "expired" error if needed
+      try {
+        const historyCheck = await fetch("/api/check-password-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailLower, password })
+        });
+        if (historyCheck.ok) {
+          const historyData = await historyCheck.json();
+          if (historyData.isOld) {
+            setError(isAr ? "كلمة السر لم تعد فعالة بعد الآن" : "Password is no longer active");
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.log("[Auth Info] Skipping history check or using local history verification.");
+      }
+
+      let user: any = null;
+      let usedFallback = false;
+
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, emailLower, password);
+        user = userCredential.user;
+      } catch (authErr: any) {
+        console.log("[Auth Info] Attempting secure local database verification...");
+        
+        // Try verifying credentials with our backend local fallback
+        const fallbackRes = await fetch("/api/login-fallback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailLower, password })
+        });
+
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          user = fallbackData.user;
+          usedFallback = true;
+          // Store fallback user session
+          localStorage.setItem("fallback_user", JSON.stringify(user));
+        } else {
+          // Both failed, throw original Firebase error
+          throw authErr;
+        }
+      }
+
+      if (!usedFallback) {
+        // Save/sync current password on backend in the background
+        fetch("/api/save-current-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailLower, password, displayName: user.displayName || email.split("@")[0] })
+        }).catch((syncErr) => console.warn("Failed to sync current password:", syncErr));
+
+        // Update last login in Firestore asynchronously
+        setDoc(doc(db, "users", user.uid), {
+          email: emailLower,
+          displayName: user.displayName || email.split("@")[0],
+          provider: "password",
+          lastLoginAt: new Date().toISOString()
+        }, { merge: true }).catch((dbSaveErr) => {
+          console.error("Failed to update last login in database:", dbSaveErr);
+        });
+      }
 
       setSuccess(t.loginSuccess);
       if (onUserUpdate) {
@@ -265,7 +531,6 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
         onBack();
       }, 1000);
     } catch (err: any) {
-      console.warn("Authentication issue handled gracefully:", err.code || err.message);
       setEmailError(true);
       setPasswordError(true);
       setError(isAr ? "كلمة المرور التي أدخلتها خاطئة" : "The password you entered is incorrect");
@@ -440,6 +705,13 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
         console.error("Failed to save user profile to database during registration:", dbSaveErr);
       });
 
+      // Save/sync current password on backend in the background
+      fetch("/api/save-current-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailLower, password, displayName: username.trim() })
+      }).catch((syncErr) => console.warn("Failed to sync current password on registration:", syncErr));
+
       setSuccess(t.registerSuccess);
       setTimeout(() => {
         onBack();
@@ -499,158 +771,393 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
 
         {/* ----------------- VIEW 1: SIGN IN PAGE ----------------- */}
         {!isRegister ? (
-          <div>
-            {/* Header Titles */}
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight font-sans">
-                {isAr ? "تسجيل الدخول إلى حسابك" : "Sign in to your account"}
-              </h2>
-              <p className="text-xs text-slate-400 mt-2 font-medium">
-                {isAr ? "أهلاً بعودتك! يُرجى إدخال بياناتك." : "Welcome back! Please enter your details."}
-              </p>
-            </div>
-
-            {/* Social Authentication Row */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <button
-                type="button"
-                onClick={handleGithubAuth}
-                className="flex items-center justify-center py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 min-h-[44px]"
-                title={isAr ? "تسجيل الدخول بواسطة GitHub" : "Sign in with GitHub"}
-              >
-                <GithubIcon />
-              </button>
-
-              <button
-                type="button"
-                onClick={handleFacebookAuth}
-                className="flex items-center justify-center py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 min-h-[44px]"
-                title={isAr ? "تسجيل الدخول بواسطة Facebook" : "Sign in with Facebook"}
-              >
-                <FacebookIcon />
-              </button>
-
-              <button
-                type="button"
-                onClick={handleGoogleAuth}
-                className="flex items-center justify-center py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 min-h-[44px]"
-                title={isAr ? "تسجيل الدخول بواسطة Google" : "Sign in with Google"}
-              >
-                <GoogleIcon />
-              </button>
-            </div>
-
-            {/* Divider exactly matching the image */}
-            <div className="relative flex py-3 items-center my-5">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="flex-shrink mx-4 text-xs text-slate-400 font-bold">
-                {isAr ? "أو" : "Or"}
-              </span>
-              <div className="flex-grow border-t border-slate-200"></div>
-            </div>
-
-            {/* Login Form */}
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              {/* Email Address */}
-              <div className="space-y-1.5">
-                <div className="relative flex items-center">
-                  <span className={`absolute ${isAr ? "right-4" : "left-4"} text-slate-400`}>
-                    <Mail className="h-4 w-4" />
-                  </span>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setEmailError(false);
-                    }}
-                    className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-right" : "pl-11 pr-4 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
-                      emailError 
-                        ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
-                        : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
-                    }`}
-                    placeholder={isAr ? "البريد الإلكتروني" : "Email Address"}
-                  />
-                </div>
+          isForgotPassword ? (
+            <div>
+              {/* Header Titles */}
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight font-sans">
+                  {isAr ? "استعادة كلمة المرور" : "Recover Password"}
+                </h2>
+                <p className="text-xs text-slate-400 mt-2 font-medium">
+                  {forgotPasswordStep === 1 && (isAr ? "الخطوة 1 من 3: البريد الإلكتروني" : "Step 1 of 3: Email Address")}
+                  {forgotPasswordStep === 2 && (isAr ? "الخطوة 2 من 3: رمز التحقق" : "Step 2 of 3: Verification Code")}
+                  {forgotPasswordStep === 3 && (isAr ? "الخطوة 3 من 3: كلمة المرور الجديدة" : "Step 3 of 3: New Password")}
+                </p>
               </div>
 
-              {/* Password */}
-              <div className="space-y-1.5">
-                <div className="relative flex items-center">
-                  <span className={`absolute ${isAr ? "right-4" : "left-4"} text-slate-400`}>
-                    <Lock className="h-4 w-4" />
-                  </span>
-                  <input
-                    type={showLoginPassword ? "text" : "password"}
-                    required
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      setPasswordError(false);
-                    }}
-                    className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-11 text-right" : "pl-11 pr-11 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
-                      passwordError 
-                        ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
-                        : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
-                    }`}
-                    placeholder={isAr ? "كلمة السر" : "Password"}
-                  />
+              {/* Stepper Progress Bar */}
+              <div className="flex items-center justify-between gap-2 max-w-xs mx-auto mb-8">
+                <div className={`h-1.5 flex-1 rounded-full ${forgotPasswordStep >= 1 ? "bg-indigo-600" : "bg-slate-100"}`} />
+                <div className={`h-1.5 flex-1 rounded-full ${forgotPasswordStep >= 2 ? "bg-indigo-600" : "bg-slate-100"}`} />
+                <div className={`h-1.5 flex-1 rounded-full ${forgotPasswordStep >= 3 ? "bg-indigo-600" : "bg-slate-100"}`} />
+              </div>
+
+              {/* STEP 1: Email Address input */}
+              {forgotPasswordStep === 1 && (
+                <form onSubmit={handleForgotPasswordRequestEmail} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <div className="relative flex items-center">
+                      <span className={`absolute ${isAr ? "right-4" : "left-4"} text-slate-400`}>
+                        <Mail className="h-4 w-4" />
+                      </span>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          setEmailError(false);
+                        }}
+                        className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-right" : "pl-11 pr-4 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
+                          emailError 
+                            ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
+                            : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                        }`}
+                        placeholder={isAr ? "البريد الإلكتروني" : "Email Address"}
+                      />
+                    </div>
+                  </div>
+
                   <button
-                    type="button"
-                    onClick={() => setShowLoginPassword(!showLoginPassword)}
-                    className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-indigo-600 transition-colors duration-200 min-h-[44px] px-1`}
-                    tabIndex={-1}
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>{isAr ? "جاري الإرسال..." : "Sending..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        <span>{isAr ? "إرسال رمز التحقق" : "Send Verification Code"}</span>
+                      </>
+                    )}
                   </button>
-                </div>
-              </div>
+                </form>
+              )}
 
-              {/* Underlined forgot password link exactly as in the image */}
-              <div className="text-right">
-                <span
-                  onClick={() => {
-                    setError(isAr ? "ميزة استعادة كلمة المرور مفعّلة تلقائياً. يرجى التواصل مع الدعم الفني لإرسال كود استعادة." : "Please contact AI Support Assistant to reset your password.");
-                  }}
-                  className="text-xs text-slate-400 font-semibold hover:text-indigo-600 transition-colors cursor-pointer underline decoration-solid decoration-slate-200"
+              {/* STEP 2: Code Verification */}
+              {forgotPasswordStep === 2 && (
+                <form onSubmit={handleForgotPasswordVerifyCode} className="space-y-4">
+                  <p className="text-center text-xs text-slate-500 mb-2 leading-relaxed">
+                    {isAr 
+                      ? `تم إرسال رمز تحقق مكون من 6 أرقام إلى: ${forgotPasswordEmail}`
+                      : `A 6-digit verification code has been sent to: ${forgotPasswordEmail}`}
+                  </p>
+                  
+                  <div className="space-y-1.5">
+                    <div className="relative flex items-center">
+                      <span className={`absolute ${isAr ? "right-4" : "left-4"} text-slate-400`}>
+                        <ShieldCheck className="h-4 w-4" />
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        value={forgotPasswordCodeInput}
+                        onChange={(e) => {
+                          setForgotPasswordCodeInput(e.target.value.replace(/\D/g, ""));
+                          setVerificationError(false);
+                        }}
+                        className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-right" : "pl-11 pr-4 text-left"} text-xs font-mono tracking-[4px] font-bold focus:outline-none transition-all duration-200 ${
+                          verificationError 
+                            ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
+                            : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                        }`}
+                        placeholder="123456"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Resend and countdown timer matching the 60 seconds requirement exactly */}
+                  <div className="flex justify-between items-center text-xs mt-2 px-1">
+                    <button
+                      type="button"
+                      disabled={timer > 0 || loading}
+                      onClick={handleForgotPasswordResendCode}
+                      className={`font-bold transition-colors ${
+                        timer > 0 
+                          ? "text-slate-400 cursor-not-allowed" 
+                          : "text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                      }`}
+                    >
+                      {isAr ? "إعادة إرسال الرمز" : "Resend Code"}
+                    </button>
+                    {timer > 0 && (
+                      <span className="text-slate-500 font-medium font-mono">
+                        {isAr ? `إعادة الإرسال خلال ${timer} ثانية` : `Resend in ${timer}s`}
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>{isAr ? "التحقق من الرمز" : "Verify Code"}</span>
+                  </button>
+                </form>
+              )}
+
+              {/* STEP 3: Enter new password and confirm */}
+              {forgotPasswordStep === 3 && (
+                <form onSubmit={handleForgotPasswordResetPassword} className="space-y-4">
+                  {/* Password 1 */}
+                  <div className="space-y-1.5">
+                    <div className="relative flex items-center">
+                      <span className={`absolute ${isAr ? "right-4" : "left-4"} text-slate-400`}>
+                        <Lock className="h-4 w-4" />
+                      </span>
+                      <input
+                        type={showForgotPasswordNewPassword ? "text" : "password"}
+                        required
+                        value={forgotPasswordNewPassword}
+                        onChange={(e) => {
+                          setForgotPasswordNewPassword(e.target.value);
+                          setPasswordError(false);
+                        }}
+                        className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-11 text-right" : "pl-11 pr-11 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
+                          passwordError 
+                            ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
+                            : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                        }`}
+                        placeholder={isAr ? "كلمة المرور الجديدة" : "New Password"}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotPasswordNewPassword(!showForgotPasswordNewPassword)}
+                        className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-indigo-600 transition-colors duration-200 min-h-[44px] px-1`}
+                        tabIndex={-1}
+                      >
+                        {showForgotPasswordNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Password 2 */}
+                  <div className="space-y-1.5">
+                    <div className="relative flex items-center">
+                      <span className={`absolute ${isAr ? "right-4" : "left-4"} text-slate-400`}>
+                        <Lock className="h-4 w-4" />
+                      </span>
+                      <input
+                        type={showForgotPasswordConfirmPassword ? "text" : "password"}
+                        required
+                        value={forgotPasswordConfirmPassword}
+                        onChange={(e) => {
+                          setForgotPasswordConfirmPassword(e.target.value);
+                          setPasswordError(false);
+                        }}
+                        className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-11 text-right" : "pl-11 pr-11 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
+                          passwordError 
+                            ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
+                            : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                        }`}
+                        placeholder={isAr ? "تأكيد كلمة المرور الجديدة" : "Confirm New Password"}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotPasswordConfirmPassword(!showForgotPasswordConfirmPassword)}
+                        className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-indigo-600 transition-colors duration-200 min-h-[44px] px-1`}
+                        tabIndex={-1}
+                      >
+                        {showForgotPasswordConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>{isAr ? "جاري الحفظ..." : "Saving..."}</span>
+                      </>
+                    ) : (
+                      <span>{isAr ? "حفظ كلمة المرور الجديدة" : "Save New Password"}</span>
+                    )}
+                  </button>
+                </form>
+              )}
+
+              {/* Back to Login Footer */}
+              <div className="mt-8 text-center text-xs">
+                <button
+                  type="button"
+                  onClick={resetForgotPasswordFlow}
+                  className="text-[#1877F2] font-black hover:underline focus:outline-none cursor-pointer"
                 >
-                  {isAr ? "لقد نسيت كلمة المرور الخاصة بي" : "Forgot my password"}
-                </span>
+                  {isAr ? "الرجوع لتسجيل الدخول" : "Back to Sign In"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {/* Header Titles */}
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight font-sans">
+                  {isAr ? "تسجيل الدخول إلى حسابك" : "Sign in to your account"}
+                </h2>
+                <p className="text-xs text-slate-400 mt-2 font-medium">
+                  {isAr ? "أهلاً بعودتك! يُرجى إدخال بياناتك." : "Welcome back! Please enter your details."}
+                </p>
               </div>
 
-              {/* Login Button exactly matching the beautiful color and styling */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>{isAr ? "جاري تسجيل الدخول..." : "Signing in..."}</span>
-                  </>
-                ) : (
-                  <span>{isAr ? "تسجيل الدخول" : "Sign In"}</span>
-                )}
-              </button>
-            </form>
+              {/* Social Authentication Row */}
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                <button
+                  type="button"
+                  onClick={handleGithubAuth}
+                  className="flex items-center justify-center py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 min-h-[44px]"
+                  title={isAr ? "تسجيل الدخول بواسطة GitHub" : "Sign in with GitHub"}
+                >
+                  <GithubIcon />
+                </button>
 
-            {/* Sign Up footer link matching the screenshot */}
-            <div className="mt-8 text-center text-xs">
-              <span className="text-slate-500 font-medium">{isAr ? "ليس لديك حساب؟ " : "Don't have an account? "}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsRegister(true);
-                  resetFlow();
-                }}
-                className="text-[#1877F2] font-black hover:underline focus:outline-none"
-              >
-                {isAr ? "أنشئ حساب جديد" : "Create New Account"}
-              </button>
+                <button
+                  type="button"
+                  onClick={handlePlayGamesAuth}
+                  className="flex items-center justify-center py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 min-h-[44px]"
+                  title={isAr ? "تسجيل الدخول بواسطة Play Games" : "Sign in with Play Games"}
+                >
+                  <PlayGamesIcon />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleAuth}
+                  className="flex items-center justify-center py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 min-h-[44px]"
+                  title={isAr ? "تسجيل الدخول بواسطة Google" : "Sign in with Google"}
+                >
+                  <GoogleIcon />
+                </button>
+              </div>
+
+              {/* Divider exactly matching the image */}
+              <div className="relative flex py-3 items-center my-5">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink mx-4 text-xs text-slate-400 font-bold">
+                  {isAr ? "أو" : "Or"}
+                </span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+
+              {/* Login Form */}
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                {/* Email Address */}
+                <div className="space-y-1.5">
+                  <div className="relative flex items-center">
+                    <span className={`absolute ${isAr ? "right-4" : "left-4"} text-slate-400`}>
+                      <Mail className="h-4 w-4" />
+                    </span>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setEmailError(false);
+                      }}
+                      className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-right" : "pl-11 pr-4 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
+                        emailError 
+                          ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
+                          : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                      }`}
+                      placeholder={isAr ? "البريد الإلكتروني" : "Email Address"}
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div className="space-y-1.5">
+                  <div className="relative flex items-center">
+                    <span className={`absolute ${isAr ? "right-4" : "left-4"} text-slate-400`}>
+                      <Lock className="h-4 w-4" />
+                    </span>
+                    <input
+                      type={showLoginPassword ? "text" : "password"}
+                      required
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setPasswordError(false);
+                      }}
+                      className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-11 text-right" : "pl-11 pr-11 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
+                        passwordError 
+                          ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
+                          : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                      }`}
+                      placeholder={isAr ? "كلمة السر" : "Password"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-indigo-600 transition-colors duration-200 min-h-[44px] px-1`}
+                      tabIndex={-1}
+                    >
+                      {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Underlined forgot password link exactly as in the image */}
+                <div className="text-right">
+                  <span
+                    onClick={() => {
+                      setIsForgotPassword(true);
+                      setForgotPasswordStep(1);
+                      setForgotPasswordEmail("");
+                      setForgotPasswordCodeInput("");
+                      setForgotPasswordNewPassword("");
+                      setForgotPasswordConfirmPassword("");
+                      setError(null);
+                      setSuccess(null);
+                    }}
+                    className="text-xs text-slate-400 font-semibold hover:text-indigo-600 transition-colors cursor-pointer underline decoration-solid decoration-slate-200"
+                  >
+                    {isAr ? "لقد نسيت كلمة المرور الخاصة بي" : "Forgot my password"}
+                  </span>
+                </div>
+
+                {/* Login Button exactly matching the beautiful color and styling */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{isAr ? "جاري تسجيل الدخول..." : "Signing in..."}</span>
+                    </>
+                  ) : (
+                    <span>{isAr ? "تسجيل الدخول" : "Sign In"}</span>
+                  )}
+                </button>
+              </form>
+
+              {/* Sign Up footer link matching the screenshot */}
+              <div className="mt-8 text-center text-xs">
+                <span className="text-slate-500 font-medium">{isAr ? "ليس لديك حساب؟ " : "Don't have an account? "}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegister(true);
+                    resetFlow();
+                  }}
+                  className="text-[#1877F2] font-black hover:underline focus:outline-none"
+                >
+                  {isAr ? "أنشئ حساب جديد" : "Create New Account"}
+                </button>
+              </div>
             </div>
-          </div>
+          )
         ) : (
           /* ----------------- VIEW 2: REGISTER FLOW ----------------- */
           <div>
@@ -896,7 +1403,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
               className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-100 z-10"
             >
               {/* Top Banner accent color */}
-              <div className={`h-2 w-full ${configErrorModal.provider === "facebook" ? "bg-[#1877F2]" : "bg-slate-900"}`} />
+              <div className={`h-2 w-full ${configErrorModal.provider === "playgames" ? "bg-[#0F9D58]" : "bg-slate-900"}`} />
 
               <button
                 type="button"
@@ -909,13 +1416,13 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
 
               <div className="p-6 sm:p-8" dir={isAr ? "rtl" : "ltr"}>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className={`p-3 rounded-xl ${configErrorModal.provider === "facebook" ? "bg-blue-50 text-[#1877F2]" : "bg-slate-50 text-slate-900"}`}>
-                    {configErrorModal.provider === "facebook" ? <FacebookIcon /> : <GithubIcon />}
+                  <div className={`p-3 rounded-xl ${configErrorModal.provider === "playgames" ? "bg-green-50 text-[#0F9D58]" : "bg-slate-50 text-slate-900"}`}>
+                    {configErrorModal.provider === "playgames" ? <PlayGamesIcon /> : <GithubIcon />}
                   </div>
                   <div>
                     <h3 className="text-base sm:text-lg font-black text-slate-900">
-                      {configErrorModal.provider === "facebook"
-                        ? (isAr ? "خطوة أخيرة لتفعيل تسجيل الدخول بـ Facebook" : "Enable Facebook Auth")
+                      {configErrorModal.provider === "playgames"
+                        ? (isAr ? "خطوة أخيرة لتفعيل تسجيل الدخول بـ Play Games" : "Enable Play Games Sign-In")
                         : (isAr ? "خطوة أخيرة لتفعيل تسجيل الدخول بـ GitHub" : "Enable GitHub Auth")
                       }
                     </h3>
@@ -947,41 +1454,41 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                   </h4>
                   
                   <div className="space-y-3">
-                    {configErrorModal.provider === "facebook" ? (
+                    {configErrorModal.provider === "playgames" ? (
                       <>
                         <div className="flex gap-3">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-extrabold text-[#1877F2]">1</span>
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] font-extrabold text-[#0F9D58]">1</span>
                           <p className="text-xs text-slate-600 font-medium leading-relaxed">
                             {isAr 
-                              ? "اذهب إلى لوحة تحكم Firebase وانتقل إلى قسم Authentication ثم تبويب Sign-in method."
-                              : "Open Firebase Console, go to Authentication > Sign-in method."
+                              ? "بما أن Play Games يعتمد على حساب Google، تأكد أولاً من تفعيل تسجيل الدخول عبر Google في لوحة تحكم Firebase."
+                              : "Since Play Games auth runs via Google Accounts, verify that Google Sign-In is enabled in your Firebase Console."
                             }
                           </p>
                         </div>
                         <div className="flex gap-3">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-extrabold text-[#1877F2]">2</span>
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] font-extrabold text-[#0F9D58]">2</span>
                           <p className="text-xs text-slate-600 font-medium leading-relaxed">
                             {isAr 
-                              ? "اضغط على إضافة مزود جديد (Add Provider) واختر Facebook ثم قم بتمكينه (Enable)."
-                              : "Click Add new provider, choose Facebook and enable it."
+                              ? "اذهب إلى قسم Authentication ثم تبويب Sign-in method وقم بتمكين Google (Enable)."
+                              : "Go to Authentication > Sign-in method, choose Google and enable it."
                             }
                           </p>
                         </div>
                         <div className="flex gap-3">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-extrabold text-[#1877F2]">3</span>
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] font-extrabold text-[#0F9D58]">3</span>
                           <p className="text-xs text-slate-600 font-medium leading-relaxed">
                             {isAr 
-                              ? "أدخل معرف التطبيق (App ID) ومفتاح السر (App Secret) من صفحة مطوري فيسبوك."
-                              : "Paste your App ID and App Secret from the Facebook Developers Portal."
+                              ? "إذا كنت تقوم بتشغيل اللعبة على الهواتف، تأكد من إضافة بصمة تطبيق أندرويد (SHA-1) وإعداد خدمات Play Games من وحدة تحكم مطوري جوجل."
+                              : "If launching on mobile, ensure your SHA-1 certificate is added to Firebase and Google Play Console is configured."
                             }
                           </p>
                         </div>
                         <div className="flex gap-3">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-extrabold text-[#1877F2]">4</span>
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-100 text-[10px] font-extrabold text-[#0F9D58]">4</span>
                           <p className="text-xs text-slate-600 font-medium leading-relaxed">
                             {isAr 
-                              ? "قم بنسخ رابط إعادة التوجيه (OAuth redirect URI) من فيربيز وضعه في إعدادات تطبيق فيسبوك."
-                              : "Copy the OAuth redirect URI from Firebase and add it to your Facebook App settings."
+                              ? "يتم الآن حفظ بيانات اللاعب تحت مزود الخدمة 'playgames' تلقائياً وبأمان في قاعدة البيانات."
+                              : "Players are now registered and identified with 'playgames' provider seamlessly inside Firestore."
                             }
                           </p>
                         </div>

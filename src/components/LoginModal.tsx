@@ -108,7 +108,6 @@ export default function LoginModal({ isOpen, onClose, language, onSuccessRegiste
         resetRegisterFlow();
       }, 1000);
     } catch (err: any) {
-      console.warn("Authentication issue handled gracefully:", err.code || err.message);
       setEmailError(true);
       setPasswordError(true);
       setError(isAr ? "كلمة المرور التي أدخلتها خاطئة" : "The password you entered is incorrect");

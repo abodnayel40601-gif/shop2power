@@ -2,12 +2,13 @@ import React from "react";
 import { Globe, User, LogOut } from "lucide-react";
 import { Language, TRANSLATIONS } from "../types";
 import { User as FirebaseUser } from "../firebase";
+import Logo from "./Logo";
 
 interface HeaderProps {
   language: Language;
   setLanguage: (lang: Language) => void;
   onLogoClick?: () => void;
-  user: FirebaseUser | null;
+  user: any;
   onLoginClick: () => void;
   onLogoutClick: () => void;
 }
@@ -26,16 +27,8 @@ export default function Header({
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-sm">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand Logo & Name */}
-        <div className="flex items-center gap-3 cursor-pointer select-none" onClick={onLogoClick}>
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white shadow-md">
-            <span className="font-extrabold text-xl tracking-tight">S2</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xl font-black tracking-tight text-slate-900 font-sans">SHOP2POWER</span>
-            <span className="text-[9px] text-indigo-600 font-mono tracking-widest uppercase font-bold">
-              {language === "ar" ? "شحن معتمد" : "AUTHORIZED"}
-            </span>
-          </div>
+        <div className="flex items-center gap-1.5 cursor-pointer select-none" onClick={onLogoClick}>
+          <Logo className="h-7 w-auto sm:h-8 md:h-9" />
         </div>
 
         {/* Right Section Actions (Language Switcher & Auth) */}

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import Header from "./components/Header";
 import GameCard from "./components/GameCard";
 import TopupFlow from "./components/TopupFlow";
-import AiAssistant from "./components/AiAssistant";
 import LoginModal from "./components/LoginModal";
 import SignInPage from "./components/SignInPage";
 import { Language, Country, COUNTRIES, TRANSLATIONS } from "./types";
@@ -15,7 +14,7 @@ export default function App() {
   const [selectedCountry] = useState<Country>(COUNTRIES[0]); // Default to Egypt (EG) statically, hiding any switcher
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<"home" | "signin">(() => {
     const hash = window.location.hash;
@@ -51,8 +50,26 @@ export default function App() {
 
   // Auth State Listener
   useEffect(() => {
+    // Restore fallback user session if present
+    const savedFallback = localStorage.getItem("fallback_user");
+    if (savedFallback) {
+      try {
+        setUser(JSON.parse(savedFallback));
+      } catch (e) {
+        console.error("Failed to parse fallback user:", e);
+      }
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+      if (currentUser) {
+        setUser(currentUser);
+        localStorage.removeItem("fallback_user"); // Clear fallback if real Firebase user exists
+      } else {
+        // Only clear user state if we do not have a fallback session stored
+        if (!localStorage.getItem("fallback_user")) {
+          setUser(null);
+        }
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -60,7 +77,9 @@ export default function App() {
   // Handle Logout
   const handleLogout = async () => {
     try {
+      localStorage.removeItem("fallback_user");
       await signOut(auth);
+      setUser(null);
     } catch (err) {
       console.error("Logout error:", err);
     }
@@ -211,9 +230,6 @@ export default function App() {
           )}
         </div>
       </main>
-
-      {/* Floating AI Corner Chat Assistant */}
-      {currentView !== "signin" && <AiAssistant language={language} />}
 
       {/* Login Modal (fallback/auxiliary) */}
       <LoginModal

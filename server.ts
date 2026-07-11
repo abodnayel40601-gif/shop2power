@@ -5,11 +5,117 @@ import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
+import { initializeApp, getApps } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
+import fs from "fs";
+import crypto from "crypto";
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize Firebase Admin SDK safely with project-id fallback
+let isFirebaseAdminActive = false;
+try {
+  if (getApps().length === 0) {
+    initializeApp({
+      projectId: "shop2power1"
+    });
+  }
+  isFirebaseAdminActive = true;
+  console.log("Firebase Admin SDK initialized successfully");
+} catch (error) {
+  console.log("[Firebase Admin Info] Initialization skipped or failed (using local JSON DB fallback).");
+}
+
+// Local persistent JSON database fallback for passwords and previousPasswords
+const LOCAL_DB_PATH = path.join(__dirname, "local_users_db.json");
+
+interface LocalUserRecord {
+  email: string;
+  password?: string;
+  previousPasswords?: string[];
+  displayName?: string;
+}
+
+const PASSWORD_SALT = process.env.PASSWORD_SALT || "Shop2Power_Secure_Salt_2026!";
+
+function hashPassword(password: string): string {
+  return crypto.createHmac("sha256", PASSWORD_SALT).update(password).digest("hex");
+}
+
+function verifyPassword(inputPassword: string, storedPasswordHash: string): boolean {
+  if (!storedPasswordHash) return false;
+  if (storedPasswordHash.length === 64 && /^[0-9a-f]+$/.test(storedPasswordHash)) {
+    return hashPassword(inputPassword) === storedPasswordHash;
+  }
+  return inputPassword === storedPasswordHash;
+}
+
+function getLocalUser(email: string): LocalUserRecord | null {
+  try {
+    if (!fs.existsSync(LOCAL_DB_PATH)) return null;
+    const data = JSON.parse(fs.readFileSync(LOCAL_DB_PATH, "utf-8"));
+    return data[email.toLowerCase()] || null;
+  } catch (e) {
+    console.error("Error reading local user db:", e);
+    return null;
+  }
+}
+
+function saveLocalUser(email: string, record: Partial<LocalUserRecord>) {
+  try {
+    const data = fs.existsSync(LOCAL_DB_PATH) 
+      ? JSON.parse(fs.readFileSync(LOCAL_DB_PATH, "utf-8"))
+      : {};
+    const emailLower = email.toLowerCase();
+    const existing = data[emailLower] || { email: emailLower, previousPasswords: [] };
+    
+    const existingPasswordHashed = existing.password
+      ? (existing.password.length === 64 && /^[0-9a-f]+$/.test(existing.password) ? existing.password : hashPassword(existing.password))
+      : undefined;
+
+    let updatedPrevious = (existing.previousPasswords || []).map((p: string) => 
+      (p.length === 64 && /^[0-9a-f]+$/.test(p)) ? p : hashPassword(p)
+    );
+
+    if (record.password) {
+      const newPasswordHashed = hashPassword(record.password);
+      if (existingPasswordHashed && existingPasswordHashed !== newPasswordHashed) {
+        if (!updatedPrevious.includes(existingPasswordHashed)) {
+          updatedPrevious.push(existingPasswordHashed);
+        }
+      }
+    }
+
+    if (record.previousPasswords) {
+      const hashedPrev = record.previousPasswords.map((p: string) => 
+        (p.length === 64 && /^[0-9a-f]+$/.test(p)) ? p : hashPassword(p)
+      );
+      updatedPrevious = Array.from(new Set([...updatedPrevious, ...hashedPrev]));
+    }
+
+    const activePasswordHashed = record.password 
+      ? hashPassword(record.password) 
+      : existingPasswordHashed;
+      
+    if (activePasswordHashed) {
+      updatedPrevious = updatedPrevious.filter(p => p !== activePasswordHashed);
+    }
+
+    data[emailLower] = {
+      ...existing,
+      ...record,
+      password: record.password ? hashPassword(record.password) : existing.password,
+      previousPasswords: updatedPrevious
+    };
+    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error("Error writing local user db:", e);
+  }
+}
 
 // In-memory rate limiting map to prevent brute-force/spam attacks
 interface RateLimitRecord {
@@ -87,7 +193,7 @@ async function startServer() {
 
   // API endpoint to send real verification codes using Nodemailer
   app.post("/api/send-code", async (req, res) => {
-    const { email, code, username } = req.body;
+    const { email, code, username, type } = req.body;
 
     // 1. Structural Validation
     if (!email || !code) {
@@ -97,6 +203,7 @@ async function startServer() {
     const emailLower = String(email).trim().toLowerCase();
     const codeStr = String(code).trim();
     const sanitizedUser = sanitizeUsername(username);
+    const isReset = type === "reset";
 
     if (!isValidEmail(emailLower)) {
       return res.status(400).json({ error: "Invalid email format" });
@@ -145,7 +252,9 @@ async function startServer() {
       const mailOptions = {
         from: `"Shop2Power" <${smtpUser}>`,
         to: emailLower,
-        subject: "رمز التحقق لحسابك في شوب تو باور - Shop2Power Verification Code",
+        subject: isReset 
+          ? "رمز استعادة كلمة المرور لحسابك في شوب تو باور - Shop2Power Password Reset Code"
+          : "رمز التحقق لحسابك في شوب تو باور - Shop2Power Verification Code",
         html: `
           <div style="direction: rtl; text-align: right; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; max-width: 500px; margin: 20px auto; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
             <div style="text-align: center; margin-bottom: 25px;">
@@ -156,7 +265,9 @@ async function startServer() {
             
             <p style="font-size: 16px; color: #1e293b; font-weight: bold; margin-bottom: 10px;">أهلاً بك يا ${sanitizedUser || "لاعبنا العزيز"} 🎮،</p>
             <p style="font-size: 14px; color: #475569; line-height: 1.6; margin-bottom: 25px;">
-              لقد تلقينا طلباً لإنشاء حساب جديد في متجر شوب تو باور. يرجى استخدام رمز التحقق الآمن التالي لإتمام التحقق من بريدك الإلكتروني:
+              ${isReset 
+                ? "لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك في متجر شوب تو باور. يرجى استخدام رمز التحقق الآمن التالي لإتمام عملية التغيير:"
+                : "لقد تلقينا طلباً لإنشاء حساب جديد في متجر شوب تو باور. يرجى استخدام رمز التحقق الآمن التالي لإتمام التحقق من بريدك الإلكتروني:"}
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -186,6 +297,190 @@ async function startServer() {
       console.error("Nodemailer SMTP Error:", error);
       res.status(500).json({ error: error.message || "Failed to send email via SMTP" });
     }
+  });
+
+  // API endpoint to update user password in Firebase Auth + Firestore, with local JSON fallback
+  app.post("/api/reset-password", async (req, res) => {
+    const { email, newPassword } = req.body;
+    if (!email || !newPassword) {
+      return res.status(400).json({ error: "Email and new password are required" });
+    }
+
+    const emailLower = String(email).trim().toLowerCase();
+
+    // 1. Update in the local persistent fallback DB
+    saveLocalUser(emailLower, { password: newPassword });
+
+    // 2. Attempt to update in real Firebase Auth & Firestore using Admin SDK if initialized
+    let firebaseUpdated = false;
+    try {
+      if (isFirebaseAdminActive && getApps().length > 0) {
+        const userRecord = await getAuth().getUserByEmail(emailLower);
+        const uid = userRecord.uid;
+
+        // Update password in Firebase Auth
+        await getAuth().updateUser(uid, { password: newPassword });
+
+        // Update password & history in Firestore
+        const dbAdmin = getFirestore();
+        const userDocRef = dbAdmin.collection("users").doc(uid);
+        const userDoc = await userDocRef.get();
+
+        let previousPasswords: string[] = [];
+        let oldPassword = "";
+
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          oldPassword = userData?.password || "";
+          previousPasswords = userData?.previousPasswords || [];
+          
+          const oldPasswordHashed = oldPassword && !(oldPassword.length === 64 && /^[0-9a-f]+$/.test(oldPassword))
+            ? hashPassword(oldPassword)
+            : oldPassword;
+          
+          const newPasswordHashed = hashPassword(newPassword);
+
+          if (oldPasswordHashed && oldPasswordHashed !== newPasswordHashed && !previousPasswords.includes(oldPasswordHashed)) {
+            previousPasswords.push(oldPasswordHashed);
+          }
+        }
+
+        const hashedPrev = previousPasswords.map((p: string) => 
+          (p.length === 64 && /^[0-9a-f]+$/.test(p)) ? p : hashPassword(p)
+        );
+
+        await userDocRef.set({
+          password: hashPassword(newPassword),
+          previousPasswords: hashedPrev,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        // Sync back previous passwords into our local db
+        saveLocalUser(emailLower, { previousPasswords: hashedPrev });
+        firebaseUpdated = true;
+      }
+    } catch (fbError) {
+      isFirebaseAdminActive = false;
+    }
+
+    res.json({ success: true, firebaseUpdated });
+  });
+
+  // API endpoint to verify if an entered password belongs to the user's password history (to trigger custom error message)
+  app.post("/api/check-password-history", async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const emailLower = String(email).trim().toLowerCase();
+
+    // 1. Check local DB history first
+    const localUser = getLocalUser(emailLower);
+    if (localUser) {
+      if (localUser.password && verifyPassword(password, localUser.password)) {
+        return res.json({ isOld: false });
+      }
+      if (localUser.previousPasswords) {
+        const isOldInHistory = localUser.previousPasswords.some(oldPassHash => 
+          verifyPassword(password, oldPassHash)
+        );
+        if (isOldInHistory) {
+          return res.json({ isOld: true });
+        }
+      }
+    }
+
+    // 2. Check Firestore history if Admin SDK is active
+    try {
+      if (isFirebaseAdminActive && getApps().length > 0) {
+        const userRecord = await getAuth().getUserByEmail(emailLower);
+        const uid = userRecord.uid;
+
+        const dbAdmin = getFirestore();
+        const userDoc = await dbAdmin.collection("users").doc(uid).get();
+
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          const currentPassword = userData?.password || "";
+          if (currentPassword && verifyPassword(password, currentPassword)) {
+            return res.json({ isOld: false });
+          }
+          const previousPasswords = userData?.previousPasswords || [];
+          const isOldInFbHistory = previousPasswords.some((oldPass: string) => 
+            verifyPassword(password, oldPass)
+          );
+          if (isOldInFbHistory) {
+            return res.json({ isOld: true });
+          }
+        }
+      }
+    } catch (fbError) {
+      isFirebaseAdminActive = false;
+    }
+
+    res.json({ isOld: false });
+  });
+
+  // API endpoint to save the current password on successful login or registration so that we can maintain a robust previousPasswords list
+  app.post("/api/save-current-password", async (req, res) => {
+    const { email, password, displayName } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const emailLower = String(email).trim().toLowerCase();
+
+    // Save locally
+    const localUpdate: Partial<LocalUserRecord> = { password };
+    if (displayName) {
+      localUpdate.displayName = displayName;
+    }
+    saveLocalUser(emailLower, localUpdate);
+
+    // Save in Firestore if Admin SDK is active
+    try {
+      if (isFirebaseAdminActive && getApps().length > 0) {
+        const userRecord = await getAuth().getUserByEmail(emailLower);
+        const uid = userRecord.uid;
+
+        const dbAdmin = getFirestore();
+        const userDocRef = dbAdmin.collection("users").doc(uid);
+        const fbUpdate: any = { password: hashPassword(password) };
+        if (displayName) {
+          fbUpdate.displayName = displayName;
+        }
+        await userDocRef.set(fbUpdate, { merge: true });
+      }
+    } catch (fbError) {
+      isFirebaseAdminActive = false;
+    }
+
+    res.json({ success: true });
+  });
+
+  // API endpoint to verify user credentials using local DB fallback
+  app.post("/api/login-fallback", (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const emailLower = String(email).trim().toLowerCase();
+    const localUser = getLocalUser(emailLower);
+
+    if (localUser && localUser.password && verifyPassword(password, localUser.password)) {
+      return res.json({
+        success: true,
+        user: {
+          uid: `local_${Buffer.from(emailLower).toString('hex')}`,
+          email: emailLower,
+          displayName: localUser.displayName || emailLower.split("@")[0]
+        }
+      });
+    }
+
+    return res.status(401).json({ error: "Invalid credentials" });
   });
 
   // API endpoint for secure chat assistant
