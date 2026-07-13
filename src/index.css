@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -17,16 +17,27 @@
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(0, 242, 254, 0.2);
   border-radius: 9999px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(239, 68, 68, 0.4);
+  background: rgba(0, 242, 254, 0.4);
 }
 
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+/* Keyframes for premium micro-animations */
+@keyframes shine {
+  100% {
+    left: 125%;
+  }
+}
+
+.animate-shine {
+  animation: shine 1.6s infinite;
 }
 
 /* Print Styles for Top-up Receipts */
@@ -54,8 +65,121 @@
     color: black !important;
   }
   
-  /* Hide print buttons on printable invoice */
   .invoice-sheet button, .invoice-sheet svg:not(.invoice-sheet .print-area svg) {
     display: none !important;
   }
+}
+
+/* ==========================================================================
+   STUNNING DARK CYBER GAMING AUTOMATIC OVERRIDES
+   Transforms pre-existing light/white UI components into high-end glassmorphic dark panels
+   ========================================================================== */
+.dark-theme-override .bg-white {
+  background-color: #121926 !important;
+}
+
+.dark-theme-override .border-slate-200 {
+  border-color: #212d45 !important;
+}
+
+.dark-theme-override .text-slate-900 {
+  color: #ffffff !important;
+}
+
+.dark-theme-override .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+.dark-theme-override .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+.dark-theme-override .text-slate-650,
+.dark-theme-override .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+.dark-theme-override .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+.dark-theme-override .bg-slate-50 {
+  background-color: #161f30 !important;
+}
+
+.dark-theme-override .bg-slate-100 {
+  background-color: #1b263b !important;
+}
+
+.dark-theme-override .hover\:bg-slate-50:hover {
+  background-color: #1d293d !important;
+}
+
+.dark-theme-override .bg-indigo-50 {
+  background-color: #1a2538 !important;
+}
+
+.dark-theme-override .text-indigo-600 {
+  color: #00f2fe !important;
+}
+
+.dark-theme-override .bg-indigo-600 {
+  background-image: linear-gradient(to right, #00c6ff, #0072ff) !important;
+  background-color: transparent !important;
+}
+
+.dark-theme-override .hover\:bg-indigo-600:hover {
+  background-image: linear-gradient(to right, #00f2fe, #00c6ff) !important;
+  background-color: transparent !important;
+}
+
+.dark-theme-override .bg-slate-900 {
+  background-image: linear-gradient(to right, #1a2436, #111824) !important;
+  background-color: transparent !important;
+  border: 1px solid #283752 !important;
+}
+
+.dark-theme-override .hover\:bg-slate-900:hover {
+  background-image: linear-gradient(to right, #222e44, #151e2d) !important;
+  border-color: #00f2fe !important;
+}
+
+.dark-theme-override .disabled\:bg-slate-100:disabled {
+  background-color: #141b26 !important;
+  background-image: none !important;
+  color: #475569 !important;
+}
+
+.dark-theme-override .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+.dark-theme-override .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+.dark-theme-override .text-emerald-800 {
+  color: #34d399 !important;
+}
+
+.dark-theme-override .text-emerald-855,
+.dark-theme-override .text-emerald-600 {
+  color: #10b981 !important;
+}
+
+.dark-theme-override .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+.dark-theme-override .bg-rose-50 {
+  background-color: rgba(244, 63, 94, 0.08) !important;
+}
+
+.dark-theme-override .border-rose-200 {
+  border-color: rgba(244, 63, 94, 0.2) !important;
+}
+
+.dark-theme-override .text-rose-800,
+.dark-theme-override .text-rose-600 {
+  color: #fb7185 !important;
 }
