@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Mail, Lock, Loader2, Sparkles, User, ShieldCheck, Eye, EyeOff, ArrowLeft, Send, CheckCircle2, X, ExternalLink, AlertCircle, Settings } from "lucide-react";
 import { Language, TRANSLATIONS } from "../types";
+import Logo from "./Logo";
 import { 
   auth, 
   googleProvider, 
@@ -72,7 +73,7 @@ const PlayGamesIcon = () => (
 );
 
 const GithubIcon = () => (
-  <svg className="h-5 w-5 fill-slate-900" viewBox="0 0 24 24">
+  <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
     <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482C19.138 20.193 22 16.44 22 12.017 22 6.484 17.522 2 12 2z" />
   </svg>
 );
@@ -354,7 +355,15 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
       }, 1000);
     } catch (err: any) {
       console.warn("Google authentication handled gracefully:", err.code || err.message);
-      setError(isAr ? "لقد حدث خطأ ما" : "Something went wrong");
+      if (err.code === "auth/account-exists-with-different-credential") {
+        setError(
+          isAr 
+            ? "البريد الإلكتروني المرتبط بهذا الحساب مسجل بالفعل باستخدام طريقة أخرى (مثل البريد الإلكتروني أو طريقة أخرى). يرجى تسجيل الدخول بالطريقة الأصلية." 
+            : "An account already exists with the same email address but different sign-in credentials. Please use your original sign-in method."
+        );
+      } else {
+        setError(isAr ? "لقد حدث خطأ ما" : "Something went wrong");
+      }
     } finally {
       setLoading(false);
     }
@@ -390,6 +399,12 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
       console.warn("Play Games authentication handled gracefully:", err.code || err.message);
       if (err.code === "auth/invalid-credential-or-provider-id" || err.code === "auth/configuration-not-found") {
         setConfigErrorModal({ isOpen: true, provider: "playgames" });
+      } else if (err.code === "auth/account-exists-with-different-credential") {
+        setError(
+          isAr 
+            ? "البريد الإلكتروني المرتبط بهذا الحساب مسجل بالفعل باستخدام طريقة أخرى (مثل البريد الإلكتروني أو طريقة أخرى). يرجى تسجيل الدخول بالطريقة الأصلية." 
+            : "An account already exists with the same email address but different sign-in credentials. Please use your original sign-in method."
+        );
       } else {
         setError(isAr ? "لقد حدث خطأ ما" : "Something went wrong");
       }
@@ -428,6 +443,12 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
       console.warn("GitHub authentication handled gracefully:", err.code || err.message);
       if (err.code === "auth/invalid-credential-or-provider-id" || err.code === "auth/configuration-not-found") {
         setConfigErrorModal({ isOpen: true, provider: "github" });
+      } else if (err.code === "auth/account-exists-with-different-credential") {
+        setError(
+          isAr 
+            ? "البريد الإلكتروني المرتبط بحساب GitHub مسجل بالفعل باستخدام طريقة تسجيل دخول أخرى (مثل جوجل أو البريد الإلكتروني). يرجى تسجيل الدخول بالطريقة الأصلية." 
+            : "An account already exists with the same email address but different sign-in credentials (e.g. Google or Email). Please use your original sign-in method."
+        );
       } else {
         setError(isAr ? "لقد حدث خطأ ما" : "Something went wrong");
       }
@@ -726,21 +747,32 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
   };
 
   return (
-    <div className="min-h-[85vh] bg-slate-50 flex items-center justify-center px-4 py-12" dir={isAr ? "rtl" : "ltr"}>
+    <div className="min-h-screen bg-[#080c14] flex flex-col items-center justify-center px-4 py-12" dir={isAr ? "rtl" : "ltr"}>
       <motion.div 
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="w-full max-w-[460px] bg-white rounded-3xl p-8 sm:p-10 border border-slate-100 shadow-xl"
+        className="w-full max-w-[460px] bg-[#0d1527] border border-[#212d45] rounded-3xl p-8 sm:p-10 shadow-2xl shadow-black/40 relative overflow-hidden"
       >
         {/* Navigation back */}
         <button
           onClick={onBack}
-          className="mb-6 flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors duration-200"
+          className="mb-6 flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors duration-200 cursor-pointer"
         >
           <ArrowLeft className={`h-4 w-4 ${isAr ? "rotate-180" : ""}`} />
           <span>{isAr ? "الرجوع للرئيسية" : "Back to Home"}</span>
         </button>
+
+        {/* Logo / Brand Header */}
+        <div className="flex flex-col items-center justify-center mb-6">
+          <div className="inline-block relative mb-2">
+            <div className="absolute -inset-2 bg-gradient-to-r from-[#00f2fe] to-[#0072ff] rounded-full opacity-25 blur-lg animate-pulse" />
+            <Logo className="h-14 w-auto mx-auto relative drop-shadow-[0_0_15px_rgba(0,242,254,0.35)]" hideText={true} />
+          </div>
+          <span className="text-base font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-[#00f2fe] tracking-tight uppercase font-sans">
+            Shop2Power
+          </span>
+        </div>
 
         {/* Global Error & Success notifications */}
         <AnimatePresence mode="popLayout">
@@ -749,7 +781,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mb-5 rounded-2xl bg-rose-50 border border-rose-100 p-4 text-xs font-bold text-rose-600 flex items-start gap-2.5"
+              className="mb-5 rounded-2xl bg-rose-950/20 border border-rose-800/30 p-4 text-xs font-bold text-rose-400 flex items-start gap-2.5"
             >
               <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
               <span>{error}</span>
@@ -761,9 +793,9 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mb-5 rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-xs font-bold text-emerald-600 flex items-start gap-2.5"
+              className="mb-5 rounded-2xl bg-emerald-950/20 border border-emerald-800/30 p-4 text-xs font-bold text-emerald-400 flex items-start gap-2.5"
             >
-              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
               <span>{success}</span>
             </motion.div>
           )}
@@ -775,7 +807,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
             <div>
               {/* Header Titles */}
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight font-sans">
+                <h2 className="text-2xl font-extrabold text-white tracking-tight font-sans">
                   {isAr ? "استعادة كلمة المرور" : "Recover Password"}
                 </h2>
                 <p className="text-xs text-slate-400 mt-2 font-medium">
@@ -787,9 +819,9 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
 
               {/* Stepper Progress Bar */}
               <div className="flex items-center justify-between gap-2 max-w-xs mx-auto mb-8">
-                <div className={`h-1.5 flex-1 rounded-full ${forgotPasswordStep >= 1 ? "bg-indigo-600" : "bg-slate-100"}`} />
-                <div className={`h-1.5 flex-1 rounded-full ${forgotPasswordStep >= 2 ? "bg-indigo-600" : "bg-slate-100"}`} />
-                <div className={`h-1.5 flex-1 rounded-full ${forgotPasswordStep >= 3 ? "bg-indigo-600" : "bg-slate-100"}`} />
+                <div className={`h-1.5 flex-1 rounded-full ${forgotPasswordStep >= 1 ? "bg-[#00f2fe]" : "bg-[#161f30]"}`} />
+                <div className={`h-1.5 flex-1 rounded-full ${forgotPasswordStep >= 2 ? "bg-[#00f2fe]" : "bg-[#161f30]"}`} />
+                <div className={`h-1.5 flex-1 rounded-full ${forgotPasswordStep >= 3 ? "bg-[#00f2fe]" : "bg-[#161f30]"}`} />
               </div>
 
               {/* STEP 1: Email Address input */}
@@ -810,8 +842,8 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                         }}
                         className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-right" : "pl-11 pr-4 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
                           emailError 
-                            ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
-                            : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                            ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 placeholder-rose-800 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/20" 
+                            : "bg-[#161f30] border border-[#212d45] text-white placeholder-slate-500 focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                         }`}
                         placeholder={isAr ? "البريد الإلكتروني" : "Email Address"}
                       />
@@ -821,7 +853,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full bg-[#1877F2] hover:bg-[#1565C0] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-[#1877F2]/10 flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {loading ? (
                       <>
@@ -841,7 +873,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
               {/* STEP 2: Code Verification */}
               {forgotPasswordStep === 2 && (
                 <form onSubmit={handleForgotPasswordVerifyCode} className="space-y-4">
-                  <p className="text-center text-xs text-slate-500 mb-2 leading-relaxed">
+                  <p className="text-center text-xs text-slate-400 mb-2 leading-relaxed">
                     {isAr 
                       ? `تم إرسال رمز تحقق مكون من 6 أرقام إلى: ${forgotPasswordEmail}`
                       : `A 6-digit verification code has been sent to: ${forgotPasswordEmail}`}
@@ -863,8 +895,8 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                         }}
                         className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-right" : "pl-11 pr-4 text-left"} text-xs font-mono tracking-[4px] font-bold focus:outline-none transition-all duration-200 ${
                           verificationError 
-                            ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
-                            : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                            ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/20" 
+                            : "bg-[#161f30] border border-[#212d45] text-white placeholder-slate-500 focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                         }`}
                         placeholder="123456"
                       />
@@ -879,14 +911,14 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                       onClick={handleForgotPasswordResendCode}
                       className={`font-bold transition-colors ${
                         timer > 0 
-                          ? "text-slate-400 cursor-not-allowed" 
-                          : "text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                          ? "text-slate-500 cursor-not-allowed" 
+                          : "text-[#00f2fe] hover:text-[#00c6ff] cursor-pointer"
                       }`}
                     >
                       {isAr ? "إعادة إرسال الرمز" : "Resend Code"}
                     </button>
                     {timer > 0 && (
-                      <span className="text-slate-500 font-medium font-mono">
+                      <span className="text-slate-400 font-medium font-mono">
                         {isAr ? `إعادة الإرسال خلال ${timer} ثانية` : `Resend in ${timer}s`}
                       </span>
                     )}
@@ -895,7 +927,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full bg-[#1877F2] hover:bg-[#1565C0] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-[#1877F2]/10 flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <span>{isAr ? "التحقق من الرمز" : "Verify Code"}</span>
                   </button>
@@ -921,15 +953,15 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                         }}
                         className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-11 text-right" : "pl-11 pr-11 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
                           passwordError 
-                            ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
-                            : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                            ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 placeholder-rose-800 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/20" 
+                            : "bg-[#161f30] border border-[#212d45] text-white placeholder-slate-500 focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                         }`}
                         placeholder={isAr ? "كلمة المرور الجديدة" : "New Password"}
                       />
                       <button
                         type="button"
                         onClick={() => setShowForgotPasswordNewPassword(!showForgotPasswordNewPassword)}
-                        className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-indigo-600 transition-colors duration-200 min-h-[44px] px-1`}
+                        className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-[#00f2fe] transition-colors duration-200 min-h-[44px] px-1`}
                         tabIndex={-1}
                       >
                         {showForgotPasswordNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -953,15 +985,15 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                         }}
                         className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-11 text-right" : "pl-11 pr-11 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
                           passwordError 
-                            ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
-                            : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                            ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 placeholder-rose-800 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/20" 
+                            : "bg-[#161f30] border border-[#212d45] text-white placeholder-slate-500 focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                         }`}
                         placeholder={isAr ? "تأكيد كلمة المرور الجديدة" : "Confirm New Password"}
                       />
                       <button
                         type="button"
                         onClick={() => setShowForgotPasswordConfirmPassword(!showForgotPasswordConfirmPassword)}
-                        className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-indigo-600 transition-colors duration-200 min-h-[44px] px-1`}
+                        className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-[#00f2fe] transition-colors duration-200 min-h-[44px] px-1`}
                         tabIndex={-1}
                       >
                         {showForgotPasswordConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -972,7 +1004,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full bg-[#1877F2] hover:bg-[#1565C0] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-[#1877F2]/10 flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {loading ? (
                       <>
@@ -991,7 +1023,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                 <button
                   type="button"
                   onClick={resetForgotPasswordFlow}
-                  className="text-[#1877F2] font-black hover:underline focus:outline-none cursor-pointer"
+                  className="text-[#00f2fe] font-black hover:underline focus:outline-none cursor-pointer"
                 >
                   {isAr ? "الرجوع لتسجيل الدخول" : "Back to Sign In"}
                 </button>
@@ -1001,7 +1033,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
             <div>
               {/* Header Titles */}
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight font-sans">
+                <h2 className="text-2xl font-extrabold text-white tracking-tight font-sans">
                   {isAr ? "تسجيل الدخول إلى حسابك" : "Sign in to your account"}
                 </h2>
                 <p className="text-xs text-slate-400 mt-2 font-medium">
@@ -1014,7 +1046,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                 <button
                   type="button"
                   onClick={handleGithubAuth}
-                  className="flex items-center justify-center py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 min-h-[44px]"
+                  className="flex items-center justify-center py-3 border border-[#212d45] rounded-xl hover:bg-[#161f30] hover:border-[#00f2fe]/30 transition-all duration-200 min-h-[44px] cursor-pointer text-white"
                   title={isAr ? "تسجيل الدخول بواسطة GitHub" : "Sign in with GitHub"}
                 >
                   <GithubIcon />
@@ -1023,7 +1055,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                 <button
                   type="button"
                   onClick={handlePlayGamesAuth}
-                  className="flex items-center justify-center py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 min-h-[44px]"
+                  className="flex items-center justify-center py-3 border border-[#212d45] rounded-xl hover:bg-[#161f30] hover:border-[#00f2fe]/30 transition-all duration-200 min-h-[44px] cursor-pointer text-white"
                   title={isAr ? "تسجيل الدخول بواسطة Play Games" : "Sign in with Play Games"}
                 >
                   <PlayGamesIcon />
@@ -1032,7 +1064,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                 <button
                   type="button"
                   onClick={handleGoogleAuth}
-                  className="flex items-center justify-center py-3 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 min-h-[44px]"
+                  className="flex items-center justify-center py-3 border border-[#212d45] rounded-xl hover:bg-[#161f30] hover:border-[#00f2fe]/30 transition-all duration-200 min-h-[44px] cursor-pointer text-white"
                   title={isAr ? "تسجيل الدخول بواسطة Google" : "Sign in with Google"}
                 >
                   <GoogleIcon />
@@ -1041,11 +1073,11 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
 
               {/* Divider exactly matching the image */}
               <div className="relative flex py-3 items-center my-5">
-                <div className="flex-grow border-t border-slate-200"></div>
+                <div className="flex-grow border-t border-[#212d45]"></div>
                 <span className="flex-shrink mx-4 text-xs text-slate-400 font-bold">
                   {isAr ? "أو" : "Or"}
                 </span>
-                <div className="flex-grow border-t border-slate-200"></div>
+                <div className="flex-grow border-t border-[#212d45]"></div>
               </div>
 
               {/* Login Form */}
@@ -1066,8 +1098,8 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                       }}
                       className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-right" : "pl-11 pr-4 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
                         emailError 
-                          ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
-                          : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                          ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 placeholder-rose-800 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/20" 
+                          : "bg-[#161f30] border border-[#212d45] text-white placeholder-slate-500 focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                       }`}
                       placeholder={isAr ? "البريد الإلكتروني" : "Email Address"}
                     />
@@ -1090,15 +1122,15 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                       }}
                       className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-11 text-right" : "pl-11 pr-11 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
                         passwordError 
-                          ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500 focus:ring-4 focus:ring-rose-100" 
-                          : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100"
+                          ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 placeholder-rose-800 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/20" 
+                          : "bg-[#161f30] border border-[#212d45] text-white placeholder-slate-500 focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                       }`}
                       placeholder={isAr ? "كلمة السر" : "Password"}
                     />
                     <button
                       type="button"
                       onClick={() => setShowLoginPassword(!showLoginPassword)}
-                      className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-indigo-600 transition-colors duration-200 min-h-[44px] px-1`}
+                      className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-[#00f2fe] transition-colors duration-200 min-h-[44px] px-1`}
                       tabIndex={-1}
                     >
                       {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1119,7 +1151,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                       setError(null);
                       setSuccess(null);
                     }}
-                    className="text-xs text-slate-400 font-semibold hover:text-indigo-600 transition-colors cursor-pointer underline decoration-solid decoration-slate-200"
+                    className="text-xs text-slate-400 font-semibold hover:text-[#00f2fe] transition-colors cursor-pointer underline decoration-solid decoration-[#212d45]"
                   >
                     {isAr ? "لقد نسيت كلمة المرور الخاصة بي" : "Forgot my password"}
                   </span>
@@ -1129,7 +1161,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-[#1877F2] hover:bg-[#1565C0] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-[#1877F2]/10 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {loading ? (
                     <>
@@ -1144,14 +1176,14 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
 
               {/* Sign Up footer link matching the screenshot */}
               <div className="mt-8 text-center text-xs">
-                <span className="text-slate-500 font-medium">{isAr ? "ليس لديك حساب؟ " : "Don't have an account? "}</span>
+                <span className="text-slate-400 font-medium">{isAr ? "ليس لديك حساب؟ " : "Don't have an account? "}</span>
                 <button
                   type="button"
                   onClick={() => {
                     setIsRegister(true);
                     resetFlow();
                   }}
-                  className="text-[#1877F2] font-black hover:underline focus:outline-none"
+                  className="text-[#00f2fe] font-black hover:underline focus:outline-none cursor-pointer"
                 >
                   {isAr ? "أنشئ حساب جديد" : "Create New Account"}
                 </button>
@@ -1163,7 +1195,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
           <div>
             {/* Header Titles */}
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight font-sans">
+              <h2 className="text-2xl font-extrabold text-white tracking-tight font-sans">
                 {isAr ? "أنشئ حساب جديد" : "Create New Account"}
               </h2>
               <p className="text-xs text-slate-400 mt-2 font-medium">
@@ -1175,9 +1207,9 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
 
             {/* Stepper Progress Bar */}
             <div className="flex items-center justify-between gap-2 max-w-xs mx-auto mb-8">
-              <div className={`h-1.5 flex-1 rounded-full ${registerStep >= 1 ? "bg-indigo-600" : "bg-slate-100"}`} />
-              <div className={`h-1.5 flex-1 rounded-full ${registerStep >= 2 ? "bg-indigo-600" : "bg-slate-100"}`} />
-              <div className={`h-1.5 flex-1 rounded-full ${registerStep >= 3 ? "bg-indigo-600" : "bg-slate-100"}`} />
+              <div className={`h-1.5 flex-1 rounded-full ${registerStep >= 1 ? "bg-[#00f2fe]" : "bg-[#161f30]"}`} />
+              <div className={`h-1.5 flex-1 rounded-full ${registerStep >= 2 ? "bg-[#00f2fe]" : "bg-[#161f30]"}`} />
+              <div className={`h-1.5 flex-1 rounded-full ${registerStep >= 3 ? "bg-[#00f2fe]" : "bg-[#161f30]"}`} />
             </div>
 
             {/* STEP 1: Basic credentials */}
@@ -1199,8 +1231,8 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                       }}
                       className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-right" : "pl-11 pr-4 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
                         usernameError 
-                          ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300" 
-                          : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4"
+                          ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 placeholder-rose-800" 
+                          : "bg-[#161f30] border border-[#212d45] text-white placeholder-slate-500 focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                       }`}
                       placeholder={isAr ? "اسم المستخدم" : "Username"}
                     />
@@ -1223,8 +1255,8 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                       }}
                       className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-right" : "pl-11 pr-4 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
                         emailError 
-                          ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500" 
-                          : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4"
+                          ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 placeholder-rose-800 focus:border-rose-500" 
+                          : "bg-[#161f30] border border-[#212d45] text-white placeholder-slate-500 focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                       }`}
                       placeholder={isAr ? "البريد الإلكتروني" : "Email Address"}
                     />
@@ -1235,7 +1267,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-[#1877F2] hover:bg-[#1565C0] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-[#1877F2]/10 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {loading ? (
                     <>
@@ -1252,10 +1284,10 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
             {/* STEP 2: Email code verification */}
             {registerStep === 2 && (
               <form onSubmit={handleVerifyCodeSubmit} className="space-y-4">
-                <div className="text-center bg-indigo-50/50 border border-indigo-100/30 rounded-2xl p-4 mb-4">
-                  <p className="text-xs text-slate-600 leading-relaxed">
+                <div className="text-center bg-[#161f30] border border-[#212d45] rounded-2xl p-4 mb-4">
+                  <p className="text-xs text-slate-300 leading-relaxed">
                     {isAr ? "لقد أرسلنا رمز تحقق أمني مكون من 6 أرقام إلى:" : "We sent a 6-digit verification code to:"}
-                    <strong className="block text-indigo-700 text-xs mt-1 select-all">{email}</strong>
+                    <strong className="block text-[#00f2fe] text-xs mt-1 select-all">{email}</strong>
                   </p>
                 </div>
 
@@ -1276,8 +1308,8 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                       }}
                       className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-4 text-center tracking-[8px] font-bold" : "pl-11 pr-4 text-center tracking-[8px] font-bold"} text-base focus:outline-none transition-all duration-200 ${
                         verificationError 
-                          ? "bg-rose-50 border border-rose-300 text-rose-900 focus:border-rose-500" 
-                          : "bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:border-indigo-600 focus:ring-4"
+                          ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 focus:border-rose-500" 
+                          : "bg-[#161f30] border border-[#212d45] text-white focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                       }`}
                       placeholder="000000"
                     />
@@ -1287,7 +1319,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                 {/* Verification submit button */}
                 <button
                   type="submit"
-                  className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-[#1877F2] hover:bg-[#1565C0] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-[#1877F2]/10 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span>{isAr ? "تحقق ومتابعة" : "Verify & Continue"}</span>
                 </button>
@@ -1298,8 +1330,8 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                     type="button"
                     disabled={timer > 0 || loading}
                     onClick={handleResendCode}
-                    className={`text-xs font-bold transition duration-150 ${
-                      timer > 0 ? "text-slate-400 cursor-not-allowed" : "text-[#1877F2] hover:underline"
+                    className={`text-xs font-bold transition duration-150 cursor-pointer ${
+                      timer > 0 ? "text-slate-500 cursor-not-allowed" : "text-[#00f2fe] hover:underline"
                     }`}
                   >
                     {timer > 0 
@@ -1329,15 +1361,15 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                       }}
                       className={`w-full rounded-xl py-3.5 ${isAr ? "pr-11 pl-11 text-right" : "pl-11 pr-11 text-left"} text-xs font-medium focus:outline-none transition-all duration-200 ${
                         passwordError 
-                          ? "bg-rose-50 border border-rose-300 text-rose-900 placeholder-rose-300 focus:border-rose-500" 
-                          : "bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4"
+                          ? "bg-rose-950/20 border border-rose-800/30 text-rose-300 placeholder-rose-800 focus:border-rose-500" 
+                          : "bg-[#161f30] border border-[#212d45] text-white placeholder-slate-500 focus:bg-[#1a253a] focus:border-[#00f2fe] focus:ring-4 focus:ring-[#00f2fe]/15"
                       }`}
                       placeholder={isAr ? "أدخل كلمة سر قوية" : "Enter secure password"}
                     />
                     <button
                       type="button"
                       onClick={() => setShowRegisterPassword(!showRegisterPassword)}
-                      className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-indigo-600 transition-colors duration-200 min-h-[44px] px-1`}
+                      className={`absolute inset-y-0 ${isAr ? "left-3.5" : "right-3.5"} flex items-center text-slate-400 hover:text-[#00f2fe] transition-colors duration-200 min-h-[44px] px-1`}
                       tabIndex={-1}
                     >
                       {showRegisterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1349,7 +1381,7 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-[#7cb4f8] hover:bg-[#60a0ed] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-blue-100 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-[#1877F2] hover:bg-[#1565C0] text-white py-3.5 rounded-xl font-bold text-xs transition-all duration-200 shadow-md shadow-[#1877F2]/10 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {loading ? (
                     <>
@@ -1365,14 +1397,14 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
 
             {/* Back to Login Footer link */}
             <div className="mt-8 text-center text-xs">
-              <span className="text-slate-500 font-medium">{isAr ? "لديك حساب بالفعل؟ " : "Already have an account? "}</span>
+              <span className="text-slate-400 font-medium">{isAr ? "لديك حساب بالفعل؟ " : "Already have an account? "}</span>
               <button
                 type="button"
                 onClick={() => {
                   setIsRegister(false);
                   resetFlow();
                 }}
-                className="text-[#1877F2] font-black hover:underline focus:outline-none"
+                className="text-[#00f2fe] font-black hover:underline focus:outline-none cursor-pointer"
               >
                 {isAr ? "سجل دخول" : "Sign In"}
               </button>
@@ -1380,6 +1412,13 @@ export default function SignInPage({ language, onBack, onUserUpdate }: SignInPag
           </div>
         )}
       </motion.div>
+
+
+
+      {/* Footer with copyright info */}
+      <div className="text-center text-[10px] text-slate-500 font-medium pt-6 mt-6 border-t border-[#212d45] shrink-0">
+        <span>{isAr ? "© ٢٠٢٦ Shop2Power. كل الحقوق محفوظة." : "© 2026 Shop2Power. All Rights Reserved."}</span>
+      </div>
 
       {/* Configuration Error Helper Modal */}
       <AnimatePresence>

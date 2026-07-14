@@ -171,6 +171,30 @@ async function startServer() {
 
   app.use(express.json());
 
+  // 1. General Security Headers Middleware
+  app.use((req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
+
+  // 2. Sensitive File Access Blocker Middleware
+  app.use((req, res, next) => {
+    const url = req.url.toLowerCase();
+    if (
+      url.includes(".env") || 
+      url.includes("local_users_db") || 
+      url.includes(".git") || 
+      url.includes("firebase-applet-config") || 
+      url.includes("package.json") ||
+      url.includes("firestore.rules")
+    ) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    next();
+  });
+
   // Lazy initialize Gemini client to prevent startup crashes if key is missing
   let aiClient: GoogleGenAI | null = null;
   function getAiClient(): GoogleGenAI {
@@ -302,11 +326,32 @@ async function startServer() {
   // API endpoint to update user password in Firebase Auth + Firestore, with local JSON fallback
   app.post("/api/reset-password", async (req, res) => {
     const { email, newPassword } = req.body;
-    if (!email || !newPassword) {
-      return res.status(400).json({ error: "Email and new password are required" });
+    if (!email || !newPassword || typeof email !== "string" || typeof newPassword !== "string") {
+      return res.status(400).json({ error: "Email and new password are required and must be strings" });
     }
 
     const emailLower = String(email).trim().toLowerCase();
+
+    if (!isValidEmail(emailLower)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+
+    if (newPassword.length < 6 || newPassword.length > 100) {
+      return res.status(400).json({ error: "Password must be between 6 and 100 characters" });
+    }
+
+    // Rate limiting (Max 5 attempts per hour)
+    const clientIp = req.ip || req.headers["x-forwarded-for"] || "unknown-ip";
+    const ipKey = `rate_limit_reset_ip:${clientIp}`;
+    const emailKey = `rate_limit_reset_email:${emailLower}`;
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    if (!checkRateLimit(String(ipKey), 5, ONE_HOUR)) {
+      return res.status(429).json({ error: "Too many password resets requested from this IP. Please try again after an hour." });
+    }
+    if (!checkRateLimit(String(emailKey), 5, ONE_HOUR)) {
+      return res.status(429).json({ error: "Too many password resets requested for this email address. Please try again after an hour." });
+    }
 
     // 1. Update in the local persistent fallback DB
     saveLocalUser(emailLower, { password: newPassword });
@@ -462,11 +507,29 @@ async function startServer() {
   // API endpoint to verify user credentials using local DB fallback
   app.post("/api/login-fallback", (req, res) => {
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
+    if (!email || !password || typeof email !== "string" || typeof password !== "string") {
+      return res.status(400).json({ error: "Email and password are required and must be strings" });
     }
 
     const emailLower = String(email).trim().toLowerCase();
+
+    if (!isValidEmail(emailLower)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+
+    // Rate limiting to prevent brute force (Max 10 attempts per minute)
+    const clientIp = req.ip || req.headers["x-forwarded-for"] || "unknown-ip";
+    const ipKey = `rate_limit_login_ip:${clientIp}`;
+    const emailKey = `rate_limit_login_email:${emailLower}`;
+    const ONE_MINUTE = 60 * 1000;
+
+    if (!checkRateLimit(String(ipKey), 10, ONE_MINUTE)) {
+      return res.status(429).json({ error: "Too many login attempts. Please wait a minute and try again." });
+    }
+    if (!checkRateLimit(String(emailKey), 10, ONE_MINUTE)) {
+      return res.status(429).json({ error: "Too many login attempts. Please wait a minute and try again." });
+    }
+
     const localUser = getLocalUser(emailLower);
 
     if (localUser && localUser.password && verifyPassword(password, localUser.password)) {
@@ -485,6 +548,14 @@ async function startServer() {
 
   // API endpoint for secure chat assistant
   app.post("/api/chat", async (req, res) => {
+    // Rate limiting (Max 15 messages per 5 minutes per IP)
+    const clientIp = req.ip || req.headers["x-forwarded-for"] || "unknown-ip";
+    const ipKey = `rate_limit_chat_ip:${clientIp}`;
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    if (!checkRateLimit(String(ipKey), 15, FIVE_MINUTES)) {
+      return res.status(429).json({ error: "Too many chat messages. Please wait a few minutes and try again." });
+    }
+
     try {
       const { message, history } = req.body;
 

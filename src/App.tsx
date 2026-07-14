@@ -6,6 +6,7 @@ import LoginModal from "./components/LoginModal";
 import SignInPage from "./components/SignInPage";
 import Logo from "./components/Logo";
 import BottomNav from "./components/BottomNav";
+import Footer from "./components/Footer";
 import { Language, Country, COUNTRIES, TRANSLATIONS } from "./types";
 import { GAMES, PAYMENT_METHODS } from "./data";
 import {
@@ -289,7 +290,7 @@ export default function App() {
   };
 
   // Chat BOT responses
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
@@ -301,10 +302,52 @@ export default function App() {
     };
 
     setChatMessages((prev) => [...prev, userMsg]);
+    const userPrompt = chatInput;
     const query = chatInput.toLowerCase();
     setChatInput("");
     setIsBotTyping(true);
 
+    try {
+      // Map current messages for Gemini history
+      const history = chatMessages.slice(-15).map(msg => ({
+        text: msg.sender === 'user' ? msg.text : (isAr ? msg.textAr : msg.textEn),
+        sender: msg.sender
+      }));
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: userPrompt,
+          history
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setIsBotTyping(false);
+
+        if (data && data.text) {
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              id: prev.length + 1,
+              sender: "bot",
+              textAr: data.text,
+              textEn: data.text,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }
+          ]);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not retrieve AI response from server, falling back to secure local responses:", err);
+    }
+
+    // Graceful Fallback if Server or Gemini API is not configured
     setTimeout(() => {
       setIsBotTyping(false);
       let botTextAr = "";
@@ -342,6 +385,21 @@ export default function App() {
     const name = isAr ? game.nameAr : game.nameEn;
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
+
+  if (currentView === "signin") {
+    return (
+      <div className="min-h-screen bg-[#080c14]" dir={isAr ? "rtl" : "ltr"}>
+        <SignInPage
+          language={language}
+          onBack={() => {
+            setCurrentView("home");
+            window.location.hash = "";
+          }}
+          onUserUpdate={(u) => setUser(u)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#080c14] font-sans text-slate-100 selection:bg-[#00f2fe] selection:text-[#080c14] relative overflow-x-hidden">
@@ -384,18 +442,7 @@ export default function App() {
       <main className="mx-auto max-w-7xl px-4 pt-8 pb-24 sm:pb-28 md:pb-8 sm:px-6 lg:px-8 relative z-10" dir={isAr ? "rtl" : "ltr"}>
         <div className="space-y-8">
           
-          {currentView === "signin" ? (
-            <div className="dark-theme-override">
-              <SignInPage
-                language={language}
-                onBack={() => {
-                  setCurrentView("home");
-                  window.location.hash = "";
-                }}
-                onUserUpdate={(u) => setUser(u)}
-              />
-            </div>
-          ) : selectedGame ? (
+          {selectedGame ? (
             /* Selected Game Top-Up Flow with absolute dark mode override wrapper */
             <div className="dark-theme-override">
               <TopupFlow
@@ -408,10 +455,10 @@ export default function App() {
             </div>
           ) : (
             /* Main Dashboard Views */
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div className="max-w-5xl mx-auto space-y-8">
               
-              {/* LEFT/CENTER MAIN CONTENT COLS (3/4 width on desktop) */}
-              <div className="lg:col-span-3 space-y-8">
+              {/* MAIN CONTENT COLS (Full width & Centered) */}
+              <div className="space-y-8">
                 
                 {/* 1. HOME TAB */}
                 {activeTab === "home" && (
@@ -639,47 +686,8 @@ export default function App() {
 
                 {/* 4. PAYMENTS METHODS INFO TAB */}
                 {activeTab === "payments" && (
-                  <div className="space-y-6">
-                    <div className="bg-[#101726]/80 p-6 rounded-3xl border border-[#212d45] space-y-3">
-                      <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-                        <CreditCard className="h-5.5 w-5.5 text-[#00f2fe]" />
-                        <span>{isAr ? "طرق ومنافذ الدفع الآمنة المعتمدة" : "Authorized Payment Channels"}</span>
-                      </h2>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        {isAr
-                          ? "نوفر قنوات دفع إلكترونية ونقدية مشفرة لضمان شحن حسابك في أقل من دقيقتين. لا داعي لمشاركة كلمات المرور الخاصة بك، يتم الشحن بالـ ID فقط."
-                          : "We provide highly secured, encrypted regional payments to ensure instant checkout delivery in less than 2 minutes. No password sharing required."}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      {PAYMENT_METHODS.map((pm) => (
-                        <div key={pm.id} className="bg-[#121926]/95 border border-[#212d45] p-5 rounded-3xl space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1b2538] text-[#00f2fe]">
-                              {pm.id === "garena_voucher" && <Ticket className="h-5.5 w-5.5" />}
-                              {pm.id === "vodafone_cash" && <Smartphone className="h-5.5 w-5.5" />}
-                              {pm.id === "fawry" && <QrCode className="h-5.5 w-5.5" />}
-                              {pm.id === "credit_card" && <CreditCard className="h-5.5 w-5.5" />}
-                              {pm.id === "sms" && <Smartphone className="h-5.5 w-5.5" />}
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-black text-white">{isAr ? pm.nameAr : pm.nameEn}</h3>
-                              <span className="inline-block text-[9px] font-black text-[#34d399] uppercase bg-emerald-950/40 border border-emerald-800/30 px-2 py-0.5 rounded mt-0.5">
-                                {isAr ? "فوري وتلقائي" : "Instant Delivery"}
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-xs text-slate-400 leading-relaxed">{isAr ? pm.descriptionAr : pm.descriptionEn}</p>
-                          <div className="pt-2 flex items-center justify-between text-xs text-slate-400 font-mono">
-                            <span>{isAr ? "رسوم الخدمة:" : "Gateway Fee:"}</span>
-                            <span className="font-bold text-white">
-                              {pm.feePercent === 0 ? (isAr ? "مجاني" : "FREE") : `+${pm.feePercent}%`}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="min-h-[400px] flex items-center justify-center">
+                    {/* Empty page content as requested */}
                   </div>
                 )}
 
@@ -767,79 +775,6 @@ export default function App() {
 
               </div>
 
-              {/* RIGHT STICKY SIDEBAR COLUMN (1/4 width on desktop) */}
-              <div className="lg:col-span-1 space-y-6">
-                
-                {/* Main Action card panel */}
-                <div className="sticky top-24 bg-[#131b29]/95 backdrop-blur-md p-6 rounded-3xl border border-[#212d45] space-y-6 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-                  
-                  {/* Action Button 1: Recharge Now */}
-                  <button
-                    onClick={() => {
-                      setActiveTab("home");
-                      setSelectedGameId(null);
-                      setTimeout(() => {
-                        searchInputRef.current?.focus();
-                      }, 200);
-                    }}
-                    className="w-full py-4 bg-gradient-to-r from-[#00c6ff] to-[#0072ff] hover:from-[#00f2fe] hover:to-[#00c6ff] text-[#080c14] shadow-[0_4px_20px_rgba(0,242,254,0.35)] rounded-2xl font-black text-sm transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                  >
-                    <span>{isAr ? "أعد الشحن الآن ⚡" : "Recharge Now ⚡"}</span>
-                  </button>
-
-                  {/* Action Button 2: Track Orders */}
-                  <button
-                    onClick={() => {
-                      setIsTrackingModalOpen(true);
-                    }}
-                    className="w-full py-3.5 bg-[#182335]/65 hover:bg-[#1f2c42] border border-[#2d3e5b] text-slate-200 hover:text-white rounded-2xl font-black text-xs.5 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <FileSearch className="h-4 w-4 text-[#00f2fe]" />
-                    <span>{isAr ? "تتبع الطلبات" : "Track Orders"}</span>
-                  </button>
-
-                  {/* Action Button 3: Coupons */}
-                  <button
-                    onClick={() => {
-                      setActiveTab("offers");
-                      setSelectedGameId(null);
-                    }}
-                    className="w-full py-3.5 bg-[#182335]/65 hover:bg-[#1f2c42] border border-[#2d3e5b] text-slate-200 hover:text-white rounded-2xl font-black text-xs.5 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Ticket className="h-4 w-4 text-[#00f2fe]" />
-                    <span>{isAr ? "الكوبونات والخصومات" : "Coupons & Discounts"}</span>
-                  </button>
-
-                  {/* Divider */}
-                  <div className="border-t border-[#1e2a3f] pt-4.5 space-y-4">
-                    <h4 className="text-xs.5 font-bold text-slate-400 uppercase tracking-wider">
-                      {isAr ? "طرق الدفع المفضلة" : "Preferred Payment Methods"}
-                    </h4>
-                    
-                    {/* Visual Payment row matching screenshot perfectly */}
-                    <div className="grid grid-cols-4 gap-2.5">
-                      {/* Purple mobile wallet */}
-                      <div className="h-10 rounded-xl bg-purple-950/20 border border-purple-900/40 flex items-center justify-center text-purple-400" title="Vodafone Cash">
-                        <Smartphone className="h-5 w-5" />
-                      </div>
-                      {/* Green Fawry payment */}
-                      <div className="h-10 rounded-xl bg-emerald-950/20 border border-emerald-900/40 flex items-center justify-center text-[#10b981]" title="Fawry Pay">
-                        <QrCode className="h-5 w-5" />
-                      </div>
-                      {/* Blue credit card */}
-                      <div className="h-10 rounded-xl bg-blue-950/20 border border-blue-900/40 flex items-center justify-center text-[#00f2fe]" title="Visa / Mastercard">
-                        <CreditCard className="h-5 w-5" />
-                      </div>
-                      {/* Indigo generic bills */}
-                      <div className="h-10 rounded-xl bg-indigo-950/20 border border-indigo-900/40 flex items-center justify-center text-indigo-400" title="Mobile SMS billing">
-                        <Smartphone className="h-5 w-5" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
             </div>
           )}
 
@@ -848,15 +783,10 @@ export default function App() {
 
       {/* FOOTER */}
       {currentView !== "signin" && (
-        <footer className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 border-t border-[#1d273a] text-center space-y-4 relative z-10" dir={isAr ? "rtl" : "ltr"}>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-medium">
-            <span>{t.allRightsReserved}</span>
-            <div className="flex items-center gap-1.5 text-[#00f2fe] bg-[#101726]/80 border border-[#212d45] rounded-full px-3.5 py-1.5">
-              <ShieldCheck className="h-4.5 w-4.5 text-[#00f2fe]" />
-              <span className="font-bold text-slate-300">{isAr ? "بوابة شحن معتمدة وآمنة 100%" : "100% Secure & Authorized Checkout Gateway"}</span>
-            </div>
-          </div>
-        </footer>
+        <Footer 
+          language={language}
+          onTrackOrderClick={() => setIsTrackingModalOpen(true)}
+        />
       )}
 
       {/* LOGIN MODAL (auxiliary login overlay) */}
